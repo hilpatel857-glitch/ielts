@@ -125,6 +125,11 @@
     padding:14px 16px 14px 16px; display:flex; flex-direction:column; gap:8px;
   }
   .daycard.done{border-color:var(--green-dim); box-shadow: inset 0 0 0 1px rgba(79,209,165,0.25);}
+  .daycard.today{border-color:var(--gold); box-shadow: 0 0 0 2px rgba(232,179,76,0.35);}
+  .today-pill{
+    font-family:var(--mono); font-size:9px; letter-spacing:.08em; background:var(--gold); color:var(--ink);
+    padding:2px 8px; border-radius:100px; font-weight:700;
+  }
   .daycard-head{display:flex; justify-content:space-between; align-items:baseline;}
   .daycard-day{font-family:var(--mono); font-size:11px; color:var(--faint); letter-spacing:.08em;}
   .daycard-date{font-family:var(--display); font-weight:700; font-size:15px;}
@@ -218,6 +223,10 @@
     </div>
     <div class="ticket-stats">
       <div class="stat">
+        <div class="stat-label">Today</div>
+        <div class="stat-value blue" id="todayStat">—</div>
+      </div>
+      <div class="stat">
         <div class="stat-label">Exam Date</div>
         <input type="date" id="examDateInput" />
       </div>
@@ -292,6 +301,9 @@
   <section id="tab-tracker">
     <div class="panel">
       <h2>📅 18-Day Study Tracker</h2>
+      <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+        <button class="addrow-btn" onclick="resetTrackerDates()">↻ Reset dates to start 15 Jul 2026</button>
+      </div>
       <div class="daycards" id="dayCards"></div>
     </div>
     <div class="panel">
@@ -418,11 +430,26 @@
         <button class="addrow-btn" onclick="commitToGithub(true)">⬆ Sync now</button>
       </div>
       <div class="hint" id="ghStatus" style="margin-top:12px;">Not connected yet.</div>
+
+      <div style="border-top:1px dashed var(--line); margin-top:20px; padding-top:16px;">
+        <h2 style="font-size:14px;">🔗 Share a read-only progress link</h2>
+        <div class="hint" style="margin-bottom:10px;">
+          Anyone with this link sees a live, read-only snapshot of your progress — no login, no editing.
+          Your GitHub repo must be <b>public</b> for this to work (since the viewer has no token).
+        </div>
+        <button class="addrow-btn" onclick="generateShareLink()">Generate share link</button>
+        <div style="margin-top:10px;">
+          <input type="text" id="shareLinkOutput" readonly style="width:100%; background:var(--card-2); border:1px solid var(--line); border-radius:6px; color:var(--text); padding:8px 10px; font-family:var(--mono); font-size:12px;" placeholder="Click 'Generate share link' above…"/>
+        </div>
+        <button class="addrow-btn" onclick="copyShareLink()" style="margin-top:8px;">📋 Copy link</button>
+      </div>
     </div>
   </section>
 
 </div>
 <div class="savepill" id="savePill">✓ saved</div>
+
+<div id="viewerRoot" class="app" style="display:none;"></div>
 
 <script>
 /* ============================= DATA MODEL ============================= */
@@ -468,7 +495,7 @@ const DEFAULT_TIMETABLE = [
 
 function buildDefaultTracker(){
   const days = [];
-  const start = new Date(2026,6,14); // 14 July 2026
+  const start = new Date(2026,6,15); // 15 July 2026 — Day 1
   for(let i=0;i<18;i++){
     const d = new Date(start); d.setDate(start.getDate()+i);
     days.push({date: d.toISOString().slice(0,10), reading:0, listening:0, writing:0, speaking:0, vocab:0, done:false});
@@ -735,7 +762,26 @@ async function loadFromGdrive(manual){
   }
   setGdStatus('Loading from Google Drive…', 'var(--gold)');
   try{
-    const file = await findGdriveFile();
+    const listRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,modifiedTime)&q=name='${GDRIVE_FILENAME}'`,
+      { headers: { 'Authorization': `Bearer ${gdriveAccessToken}` } }
+    );
+    if(!listRes.ok){
+      const errJson = await listRes.json().catch(()=>({}));
+      const apiMsg = errJson.error && errJson.error.message ? errJson.error.message : listRes.statusText;
+      if(listRes.status === 403 && /has not been used|disabled/i.test(apiMsg)){
+        setGdStatus('Google Drive API isn\'t enabled for your project — enable it in Cloud Console → APIs & Services → Library, then try again.', 'var(--red)');
+      } else if(listRes.status === 401){
+        gdriveAccessToken = null;
+        setGdStatus('Session expired — click "Sign in with Google" again.', 'var(--red)');
+      } else {
+        setGdStatus(`Load failed (${listRes.status}): ${apiMsg}`, 'var(--red)');
+        console.error('Drive list error', listRes.status, errJson);
+      }
+      return false;
+    }
+    const listJson = await listRes.json();
+    const file = (listJson.files && listJson.files[0]) ? listJson.files[0] : null;
     if(!file){
       gdriveFileId = null;
       setGdStatus('No data saved yet — click "Save to Drive" to create it.', 'var(--muted)');
@@ -745,7 +791,13 @@ async function loadFromGdrive(manual){
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
       headers: { 'Authorization': `Bearer ${gdriveAccessToken}` }
     });
-    if(!res.ok) throw new Error('Drive download failed: ' + res.status);
+    if(!res.ok){
+      const errJson = await res.json().catch(()=>({}));
+      const apiMsg = errJson.error && errJson.error.message ? errJson.error.message : res.statusText;
+      setGdStatus(`Load failed (${res.status}): ${apiMsg}`, 'var(--red)');
+      console.error('Drive download error', res.status, errJson);
+      return false;
+    }
     const loaded = await res.json();
     state = Object.assign(state, loaded);
     localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
@@ -754,7 +806,7 @@ async function loadFromGdrive(manual){
     return true;
   }catch(e){
     console.error(e);
-    setGdStatus('Load failed — try signing in again.', 'var(--red)');
+    setGdStatus('Load failed — network error or blocked request. Check the browser console (F12) for details.', 'var(--red)');
     return false;
   }
 }
@@ -796,14 +848,22 @@ async function saveToGdrive(manual){
         setGdStatus('Session expired — click "Sign in with Google" again.', 'var(--red)');
         return;
       }
-      throw new Error('Drive save failed: ' + res.status);
+      const errJson = await res.json().catch(()=>({}));
+      const apiMsg = errJson.error && errJson.error.message ? errJson.error.message : res.statusText;
+      if(res.status === 403 && /has not been used|disabled|API has not been used/i.test(apiMsg)){
+        setGdStatus('Google Drive API isn\'t enabled for your project — enable it in Cloud Console → APIs & Services → Library, then try again.', 'var(--red)');
+        return;
+      }
+      setGdStatus(`Save failed (${res.status}): ${apiMsg}`, 'var(--red)');
+      console.error('Drive save error', res.status, errJson);
+      return;
     }
     const json = await res.json();
     gdriveFileId = json.id || gdriveFileId;
     setGdStatus('Synced to Google Drive ✓ ' + new Date().toLocaleTimeString(), 'var(--green)');
   }catch(e){
     console.error(e);
-    setGdStatus('Save failed — check your connection and try again.', 'var(--red)');
+    setGdStatus('Save failed — network error or blocked request. Check the browser console (F12) for details.', 'var(--red)');
   }
 }
 
@@ -819,6 +879,125 @@ function toggleTheme(){
   applyTheme(current === 'light' ? 'dark' : 'light');
 }
 applyTheme(localStorage.getItem('ielts-os-theme') || 'dark');
+
+function generateShareLink(){
+  const c = getGithubConfig();
+  if(!c.owner || !c.repo){
+    setGhStatus('Fill in owner and repo first (and click "Sync now" at least once so there is data to view).', 'var(--red)');
+    return;
+  }
+  const url = new URL(window.location.href.split('?')[0]);
+  url.searchParams.set('view', '1');
+  url.searchParams.set('owner', c.owner);
+  url.searchParams.set('repo', c.repo);
+  url.searchParams.set('branch', c.branch);
+  url.searchParams.set('path', c.path);
+  document.getElementById('shareLinkOutput').value = url.toString();
+  setGhStatus('Share link generated below ✓ (repo must be public for others to view it)', 'var(--green)');
+}
+function copyShareLink(){
+  const input = document.getElementById('shareLinkOutput');
+  if(!input.value){ setGhStatus('Generate the link first.', 'var(--red)'); return; }
+  input.select();
+  navigator.clipboard.writeText(input.value).then(()=>{
+    setGhStatus('Link copied to clipboard ✓', 'var(--green)');
+  }).catch(()=>{
+    setGhStatus('Could not auto-copy — select the text and copy manually.', 'var(--red)');
+  });
+}
+
+/* ============================= READ-ONLY VIEWER MODE ============================= */
+async function initViewerMode(params){
+  document.getElementById('viewerRoot').style.display = 'block';
+  document.querySelector('.app:not(#viewerRoot)').style.display = 'none';
+  const root = document.getElementById('viewerRoot');
+  const owner = params.get('owner'), repo = params.get('repo'), branch = params.get('branch') || 'main', path = params.get('path');
+  if(!owner || !repo || !path){
+    root.innerHTML = `<div class="panel"><h2>⚠️ Invalid share link</h2><div class="hint">This link is missing required info.</div></div>`;
+    return;
+  }
+  root.innerHTML = `<div class="panel"><h2>Loading progress…</h2></div>`;
+  try{
+    const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}?t=${Date.now()}`;
+    const res = await fetch(rawUrl);
+    if(!res.ok) throw new Error('Fetch failed: ' + res.status);
+    const data = await res.json();
+    renderViewer(data, owner, repo);
+  }catch(e){
+    console.error(e);
+    root.innerHTML = `<div class="panel"><h2>⚠️ Could not load progress</h2><div class="hint">Make sure the repo is public and the data has been synced at least once. (${e.message})</div></div>`;
+  }
+}
+function renderViewer(data, owner, repo){
+  const root = document.getElementById('viewerRoot');
+  const s = Object.assign({settings:{examDate:'',targetBand:8}, tracker:[], essays:[], speaking:[]}, data);
+
+  const daysLeft = s.settings.examDate ? Math.ceil((new Date(s.settings.examDate) - new Date(new Date().toDateString())) / 86400000) : null;
+  let streak = 0;
+  for(let i=s.tracker.length-1;i>=0;i--){ if(s.tracker[i].done) streak++; else break; }
+  const doneCount = s.tracker.filter(d=>d.done).length;
+  const completion = s.tracker.length ? Math.round(100*doneCount/s.tracker.length) : 0;
+
+  const essayBands = s.essays.map(e=>avg([e.ta,e.cc,e.lr,e.gra])).filter(n=>!isNaN(n));
+  const writeBand = essayBands.length ? Math.round(2*avg(essayBands))/2 : 0;
+  const speakBands = s.speaking.map(sp=>avg([sp.fc,sp.lr,sp.gra,sp.pron])).filter(n=>!isNaN(n));
+  const speakBand = speakBands.length ? Math.round(2*avg(speakBands))/2 : 0;
+
+  const todayStr = new Date().toISOString().slice(0,10);
+  const dayCardsHtml = s.tracker.map((d,i)=>{
+    const totalHrs = SKILLS.reduce((sum,[k])=>sum+(Number(d[k])||0),0);
+    const dateObj = new Date(d.date+'T00:00:00');
+    const dayLabel = dateObj.toLocaleDateString('en-GB',{weekday:'short', day:'2-digit', month:'short'});
+    const isToday = d.date === todayStr;
+    return `<div class="daycard ${d.done?'done':''} ${isToday?'today':''}">
+      <div class="daycard-head">
+        <span class="daycard-day">DAY ${i+1}</span>
+        ${isToday ? '<span class="today-pill">TODAY</span>' : ''}
+        <span class="daycard-date">${dayLabel}</span>
+      </div>
+      <div class="daycard-foot">
+        <span class="total-h">${totalHrs.toFixed(1)}h logged</span>
+        <span class="toggle ${d.done?'on':''}" style="pointer-events:none;">${d.done?'✓ Done':'Not done'}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  root.innerHTML = `
+    <div class="ticket">
+      <div class="ticket-top">
+        <div>
+          <div class="eyebrow">Read-only Progress Report</div>
+          <h1>${owner}'s IELTS Prep</h1>
+          <div class="sub">Live view synced from GitHub · ${repo}</div>
+        </div>
+      </div>
+      <div class="ticket-stats">
+        <div class="stat"><div class="stat-label">Days Left</div><div class="stat-value red">${daysLeft==null||isNaN(daysLeft)?'—':daysLeft+' days'}</div></div>
+        <div class="stat"><div class="stat-label">Current Streak</div><div class="stat-value gold">${streak} days</div></div>
+        <div class="stat"><div class="stat-label">Completion</div><div class="stat-value green">${completion}%</div></div>
+        <div class="stat"><div class="stat-label">Writing Band</div><div class="stat-value blue">${fmtBand(writeBand)}</div></div>
+        <div class="stat"><div class="stat-label">Speaking Band</div><div class="stat-value blue">${fmtBand(speakBand)}</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>📅 Study Tracker</h2>
+      <div class="daycards">${dayCardsHtml || '<div class="hint">No tracker data yet.</div>'}</div>
+    </div>
+    <div class="panel">
+      <h2>📝 Recent Essays</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Task</th><th>Topic</th><th>Band</th></tr></thead>
+        <tbody>
+          ${s.essays.slice(-8).reverse().map(e=>{
+            const b = avg([e.ta,e.cc,e.lr,e.gra]); const br = isNaN(b)?0:Math.round(b*2)/2;
+            return `<tr><td>${e.date}</td><td>${e.task}</td><td>${e.topic||'—'}</td><td><span class="band-chip ${bandClass(br)}">${fmtBand(br)}</span></td></tr>`;
+          }).join('') || '<tr><td colspan="4" style="color:var(--faint);">No essays yet.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div class="hint" style="text-align:center; margin-top:20px;">This is a live read-only view — data updates each time it's re-synced from GitHub. Reload the page to see the latest.</div>
+  `;
+}
 
 /* ============================= NAV ============================= */
 function renderNav(){
@@ -843,6 +1022,9 @@ function switchTab(id, btn){
 function renderDashboard(){
   document.getElementById('examDateInput').value = state.settings.examDate;
   document.getElementById('targetBandInput').value = state.settings.targetBand;
+
+  const now = new Date();
+  document.getElementById('todayStat').textContent = now.toLocaleDateString('en-GB',{weekday:'short', day:'2-digit', month:'short'});
 
   const days = Math.ceil((new Date(state.settings.examDate) - new Date(new Date().toDateString())) / 86400000);
   document.getElementById('countdownStat').textContent = (isNaN(days)?'—':days) + ' days';
@@ -942,14 +1124,17 @@ document.getElementById('listenRaw').addEventListener('input', ()=>{renderDashbo
 const SKILLS = [['reading','R'],['listening','L'],['writing','W'],['speaking','S'],['vocab','V']];
 function renderTracker(){
   const wrap = document.getElementById('dayCards');
+  const todayStr = new Date().toISOString().slice(0,10);
   wrap.innerHTML = state.tracker.map((d,i)=>{
     const total = SKILLS.reduce((s,[k])=>s+Number(d[k])||0+0,0);
     const totalHrs = SKILLS.reduce((s,[k])=>s+(Number(d[k])||0),0);
     const dateObj = new Date(d.date+'T00:00:00');
     const dayLabel = dateObj.toLocaleDateString('en-GB',{weekday:'short', day:'2-digit', month:'short'});
-    return `<div class="daycard ${d.done?'done':''}">
+    const isToday = d.date === todayStr;
+    return `<div class="daycard ${d.done?'done':''} ${isToday?'today':''}">
       <div class="daycard-head">
         <span class="daycard-day">DAY ${i+1}</span>
+        ${isToday ? '<span class="today-pill">TODAY</span>' : ''}
         <span class="daycard-date">${dayLabel}</span>
       </div>
       <div class="perf"></div>
@@ -983,6 +1168,14 @@ function renderTracker(){
   });
 
   renderProgressChart();
+}
+function resetTrackerDates(){
+  if(!confirm('This will re-date your 18 tracker days to start 15 Jul 2026, keeping your existing hours/done marks in the same order. Continue?')) return;
+  const fresh = buildDefaultTracker();
+  state.tracker = state.tracker.map((d,i)=> fresh[i] ? Object.assign({}, d, {date: fresh[i].date}) : d);
+  // if old tracker was shorter/longer than 18 days, fall back to a clean fresh set
+  if(state.tracker.length !== 18) state.tracker = fresh;
+  renderTracker(); renderDashboard(); queueSave();
 }
 function renderProgressChart(){
   const chart = document.getElementById('progressChart');
@@ -1199,7 +1392,13 @@ async function init(){
     setTimeout(()=>{ withGdriveToken(()=>{}); }, 500);
   }
 }
-init();
+const urlParams = new URLSearchParams(window.location.search);
+if(urlParams.get('view') === '1'){
+  initViewerMode(urlParams);
+} else {
+  init();
+  setInterval(()=>{ renderDashboard(); renderTracker(); }, 60000);
+}
 </script>
 </body>
 </html>
