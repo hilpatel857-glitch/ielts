@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IELTS Band 8 — Operating System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A101E;
+    --panel:#111A2C;
+    --card:#16223A;
+    --card-2:#1C2B47;
+    --line: #26385C;
+    --gold:#E8B34C;
+    --gold-dim:#8A6A2E;
+    --green:#4FD1A5;
+    --green-dim:#1F5C4A;
+    --red:#FF6B6B;
+    --red-dim:#5C1F2E;
+    --blue:#6FA8FF;
+    --text:#EDEFF5;
+    --muted:#8B93A7;
+    --faint:#59627A;
+    --display: 'Space Grotesk', sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+    --body: 'Inter', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--ink); color:var(--text);
+    font-family:var(--body); -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:1180px;margin:0 auto;padding:20px 18px 60px;}
+
+  /* ---- Ticket header ---- */
+  .ticket{
+    position:relative;
+    background:linear-gradient(135deg,var(--panel),var(--card));
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px 26px;
+    margin-bottom:22px;
+    overflow:hidden;
+  }
+  .ticket::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image: repeating-linear-gradient(90deg, transparent, transparent 7px, rgba(232,179,76,0.035) 7px, rgba(232,179,76,0.035) 8px);
+    pointer-events:none;
+  }
+  .ticket-top{display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;}
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.18em; color:var(--gold); text-transform:uppercase;}
+  h1{font-family:var(--display); font-size:28px; margin:4px 0 2px; font-weight:700; letter-spacing:-0.01em;}
+  .sub{color:var(--muted); font-size:13px;}
+  .stamp{
+    font-family:var(--mono); font-size:12px; color:var(--ink); background:var(--gold);
+    padding:6px 12px; border-radius:100px; font-weight:600; white-space:nowrap;
+    transform:rotate(2deg);
+  }
+  .ticket-stats{display:flex; gap:0; margin-top:18px; border-top:1px dashed var(--line); padding-top:16px; flex-wrap:wrap;}
+  .stat{flex:1; min-width:120px; padding:0 16px; border-left:1px dashed var(--line);}
+  .stat:first-child{border-left:none; padding-left:0;}
+  .stat-label{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-family:var(--mono);}
+  .stat-value{font-family:var(--display); font-size:22px; font-weight:700; margin-top:2px;}
+  .stat-value.gold{color:var(--gold);}
+  .stat-value.green{color:var(--green);}
+  .stat-value.blue{color:var(--blue);}
+  .stat-value.red{color:var(--red);}
+  .stat input{
+    background:none;border:none;color:var(--gold);font-family:var(--display);font-size:22px;font-weight:700;
+    width:100%; padding:0; outline:none;
+  }
+
+  /* ---- Nav ---- */
+  nav{display:flex; gap:6px; overflow-x:auto; margin-bottom:18px; padding-bottom:4px;}
+  nav button{
+    font-family:var(--mono); font-size:12px; letter-spacing:.03em;
+    background:var(--panel); color:var(--muted); border:1px solid var(--line);
+    padding:9px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;
+    transition:all .15s ease;
+  }
+  nav button:hover{color:var(--text); border-color:var(--gold-dim);}
+  nav button.active{background:var(--gold); color:var(--ink); border-color:var(--gold); font-weight:600;}
+
+  section{display:none;}
+  section.active{display:block; animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:18px 20px; margin-bottom:18px;
+  }
+  .panel h2{font-family:var(--display); font-size:16px; margin:0 0 14px; color:var(--gold); display:flex; align-items:center; gap:8px;}
+  .grid{display:grid; gap:14px;}
+  .grid.cols-2{grid-template-columns:1fr 1fr;}
+  .grid.cols-3{grid-template-columns:repeat(3,1fr);}
+  @media (max-width:720px){ .grid.cols-2, .grid.cols-3{grid-template-columns:1fr;} }
+
+  /* ---- Boarding-pass day cards ---- */
+  .daycards{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px;}
+  .daycard{
+    position:relative; background:var(--card); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px 14px 16px; display:flex; flex-direction:column; gap:8px;
+  }
+  .daycard.done{border-color:var(--green-dim); box-shadow: inset 0 0 0 1px rgba(79,209,165,0.25);}
+  .daycard-head{display:flex; justify-content:space-between; align-items:baseline;}
+  .daycard-day{font-family:var(--mono); font-size:11px; color:var(--faint); letter-spacing:.08em;}
+  .daycard-date{font-family:var(--display); font-weight:700; font-size:15px;}
+  .perf{border-top:1px dashed var(--line); margin:4px 0; position:relative;}
+  .perf::before,.perf::after{
+    content:""; position:absolute; top:-7px; width:14px; height:14px; border-radius:50%; background:var(--ink);
+    border:1px solid var(--line);
+  }
+  .perf::before{left:-24px;} .perf::after{right:-24px;}
+  .hourgrid{display:grid; grid-template-columns:repeat(5,1fr); gap:6px;}
+  .hourgrid label{font-size:9px; color:var(--faint); text-align:center; display:block; font-family:var(--mono);}
+  .hourgrid input{
+    width:100%; background:var(--card-2); border:1px solid var(--line); border-radius:6px; color:var(--text);
+    text-align:center; padding:4px 2px; font-family:var(--mono); font-size:12px;
+  }
+  .daycard-foot{display:flex; justify-content:space-between; align-items:center; margin-top:4px;}
+  .total-h{font-family:var(--mono); font-size:11px; color:var(--muted);}
+  .toggle{
+    font-family:var(--mono); font-size:10px; padding:5px 10px; border-radius:100px; cursor:pointer;
+    border:1px solid var(--line); background:var(--card-2); color:var(--muted);
+  }
+  .toggle.on{background:var(--green-dim); color:var(--green); border-color:var(--green);}
+  .streakbadge{font-family:var(--mono); font-size:10px; color:var(--gold);}
+
+  /* progress bar chart */
+  .barchart{display:flex; align-items:flex-end; gap:4px; height:90px; margin-top:6px;}
+  .bar{flex:1; background:var(--card-2); border-radius:3px 3px 0 0; position:relative; min-height:2px;}
+  .bar.done{background:linear-gradient(180deg,var(--green),var(--green-dim));}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th{
+    font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--faint); text-align:left; padding:8px 8px; border-bottom:1px solid var(--line);
+  }
+  td{padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  tr:hover td{background:rgba(255,255,255,0.015);}
+  td input, td select{
+    background:var(--card-2); border:1px solid var(--line); border-radius:6px; color:var(--text);
+    padding:5px 7px; font-family:var(--body); font-size:12.5px; width:100%;
+  }
+  td input[type=number]{width:60px;}
+  .band-chip{
+    font-family:var(--mono); font-weight:600; padding:3px 9px; border-radius:100px; font-size:12px; display:inline-block;
+  }
+  .band-low{background:var(--red-dim); color:var(--red);}
+  .band-mid{background:#5C4A1F; color:var(--gold);}
+  .band-high{background:var(--green-dim); color:var(--green);}
+  .addrow-btn{
+    font-family:var(--mono); font-size:12px; background:var(--card-2); color:var(--gold);
+    border:1px dashed var(--gold-dim); border-radius:8px; padding:8px 14px; cursor:pointer; margin-top:10px;
+  }
+  .addrow-btn:hover{background:var(--card);}
+  .del-btn{
+    background:none; border:none; color:var(--faint); cursor:pointer; font-size:14px; padding:2px 6px;
+  }
+  .del-btn:hover{color:var(--red);}
+
+  .badge-row{display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line);}
+  .badge-row:last-child{border-bottom:none;}
+  .badge-name{font-size:13px;}
+  .badge-status{font-family:var(--mono); font-size:11px; padding:4px 10px; border-radius:100px;}
+  .badge-status.unlocked{background:var(--green-dim); color:var(--green);}
+  .badge-status.locked{background:var(--card-2); color:var(--faint);}
+
+  .hint{font-size:11px; color:var(--faint); margin-top:8px; line-height:1.5;}
+  .savepill{
+    position:fixed; bottom:16px; right:16px; font-family:var(--mono); font-size:11px;
+    background:var(--card); border:1px solid var(--green-dim); color:var(--green);
+    padding:7px 14px; border-radius:100px; opacity:0; transition:opacity .3s ease; pointer-events:none;
+  }
+  .savepill.show{opacity:1;}
+
+  ::-webkit-scrollbar{height:6px; width:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="ticket">
+    <div class="ticket-top">
+      <div>
+        <div class="eyebrow">Boarding Pass · Band 8</div>
+        <h1>IELTS Operating System</h1>
+        <div class="sub">Your daily command center for Reading · Listening · Writing · Speaking · Vocabulary</div>
+      </div>
+      <div class="stamp" id="predictedStamp">PREDICTED — 7.0</div>
+    </div>
+    <div class="ticket-stats">
+      <div class="stat">
+        <div class="stat-label">Exam Date</div>
+        <input type="date" id="examDateInput" />
+      </div>
+      <div class="stat">
+        <div class="stat-label">Days Remaining</div>
+        <div class="stat-value red" id="countdownStat">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Target Band</div>
+        <input type="number" step="0.5" min="1" max="9" id="targetBandInput" />
+      </div>
+      <div class="stat">
+        <div class="stat-label">Current Streak</div>
+        <div class="stat-value gold" id="streakStat">0 days</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Completion</div>
+        <div class="stat-value green" id="completionStat">0%</div>
+      </div>
+    </div>
+  </div>
+
+  <nav id="tabNav"></nav>
+
+  <section id="tab-dashboard">
+    <div class="grid cols-2">
+      <div class="panel">
+        <h2>📈 Band Score Predictor</h2>
+        <table>
+          <thead><tr><th>Skill</th><th>Input</th><th>Band</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Reading (raw /40)</td>
+              <td><input type="number" id="readRaw" min="0" max="40" value="32" /></td>
+              <td id="readBandCell"></td>
+            </tr>
+            <tr>
+              <td>Listening (raw /40)</td>
+              <td><input type="number" id="listenRaw" min="0" max="40" value="30" /></td>
+              <td id="listenBandCell"></td>
+            </tr>
+            <tr>
+              <td>Writing (avg of tracker)</td>
+              <td style="color:var(--faint); font-family:var(--mono); font-size:12px;">auto</td>
+              <td id="writeBandCell"></td>
+            </tr>
+            <tr>
+              <td>Speaking (avg of log)</td>
+              <td style="color:var(--faint); font-family:var(--mono); font-size:12px;">auto</td>
+              <td id="speakBandCell"></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="hint">Reading/Listening use the public IELTS Academic band conversion scale — treat as an estimate, not an official score.</div>
+      </div>
+
+      <div class="panel">
+        <h2>🏅 Achievement Badges</h2>
+        <div id="badgeList"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>🎯 Band Target Sheet</h2>
+      <table>
+        <thead><tr><th>Skill</th><th>Current</th><th>Target</th><th>Gap</th><th>Action Plan</th></tr></thead>
+        <tbody id="targetTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-tracker">
+    <div class="panel">
+      <h2>📅 18-Day Study Tracker</h2>
+      <div class="daycards" id="dayCards"></div>
+    </div>
+    <div class="panel">
+      <h2>📊 Completion Progress</h2>
+      <div class="barchart" id="progressChart"></div>
+    </div>
+  </section>
+
+  <section id="tab-timetable">
+    <div class="panel">
+      <h2>📖 Daily Timetable</h2>
+      <table>
+        <thead><tr><th>Time</th><th>Activity</th><th>Duration</th><th>Done</th><th>Notes</th></tr></thead>
+        <tbody id="timetableBody"></tbody>
+      </table>
+      <div class="hint" id="timetableCompletion"></div>
+    </div>
+  </section>
+
+  <section id="tab-essays">
+    <div class="panel">
+      <h2>📝 Essay Tracker</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Task</th><th>Topic</th><th>Words</th><th>Task Ach.</th><th>Coh.</th><th>Lex.</th><th>Gram.</th><th>Band</th><th></th></tr></thead>
+        <tbody id="essayBody"></tbody>
+      </table>
+      <button class="addrow-btn" onclick="addEssay()">+ Add essay</button>
+    </div>
+  </section>
+
+  <section id="tab-speaking">
+    <div class="panel">
+      <h2>🎤 Speaking Log</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Part / Topic</th><th>Fluency</th><th>Lexical</th><th>Grammar</th><th>Pron.</th><th>Band</th><th></th></tr></thead>
+        <tbody id="speakingBody"></tbody>
+      </table>
+      <button class="addrow-btn" onclick="addSpeaking()">+ Add session</button>
+    </div>
+  </section>
+
+  <section id="tab-vocab">
+    <div class="panel">
+      <h2>📚 Vocabulary Tracker <span style="color:var(--faint); font-weight:400; font-size:12px;" id="vocabCount"></span></h2>
+      <table>
+        <thead><tr><th>Word</th><th>Meaning</th><th>Example</th><th>Added</th><th>Next Review</th><th>Status</th><th></th></tr></thead>
+        <tbody id="vocabBody"></tbody>
+      </table>
+      <button class="addrow-btn" onclick="addVocab()">+ Add word</button>
+    </div>
+  </section>
+
+  <section id="tab-mistakes">
+    <div class="grid cols-2">
+      <div class="panel">
+        <h2>📖 Reading Mistakes</h2>
+        <table>
+          <thead><tr><th>Passage</th><th>Q Type</th><th>Your Ans.</th><th>Correct</th><th>Result</th><th></th></tr></thead>
+          <tbody id="readMistakeBody"></tbody>
+        </table>
+        <button class="addrow-btn" onclick="addMistake('read')">+ Add</button>
+      </div>
+      <div class="panel">
+        <h2>🎧 Listening Mistakes</h2>
+        <table>
+          <thead><tr><th>Section</th><th>Q Type</th><th>Your Ans.</th><th>Correct</th><th>Result</th><th></th></tr></thead>
+          <tbody id="listenMistakeBody"></tbody>
+        </table>
+        <button class="addrow-btn" onclick="addMistake('listen')">+ Add</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-sync">
+    <div class="panel">
+      <h2>🔗 GitHub Sync</h2>
+      <div class="hint" style="margin-bottom:14px; font-size:12px; line-height:1.6;">
+        Your data gets committed as a JSON file to a repo you choose, so it's versioned and readable from any device.
+        The token you paste below is stored only in <b>this browser's</b> local storage — it is never written into
+        the data file or the repo. Use a <b>fine-grained personal access token</b> scoped to just this one repo
+        with <b>Contents: Read and write</b> permission, and give it an expiry date. Prefer a private repo if your
+        study notes are personal.
+      </div>
+      <table>
+        <tbody>
+          <tr><td style="width:160px; color:var(--muted);">Repo owner</td><td><input type="text" id="ghOwner" placeholder="your-username"/></td></tr>
+          <tr><td style="color:var(--muted);">Repo name</td><td><input type="text" id="ghRepo" placeholder="ielts-tracker"/></td></tr>
+          <tr><td style="color:var(--muted);">Branch</td><td><input type="text" id="ghBranch" placeholder="main"/></td></tr>
+          <tr><td style="color:var(--muted);">File path</td><td><input type="text" id="ghPath" placeholder="data/ielts-data.json"/></td></tr>
+          <tr><td style="color:var(--muted);">Access token</td><td><input type="password" id="ghToken" placeholder="github_pat_..."/></td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <button class="addrow-btn" onclick="saveGithubConfig()">Save settings</button>
+        <button class="addrow-btn" onclick="loadFromGithub(true)">⬇ Load from GitHub</button>
+        <button class="addrow-btn" onclick="commitToGithub(true)">⬆ Sync now</button>
+      </div>
+      <div class="hint" id="ghStatus" style="margin-top:12px;">Not connected yet.</div>
+    </div>
+  </section>
+
+</div>
+<div class="savepill" id="savePill">✓ saved</div>
+
+<script>
+/* ============================= DATA MODEL ============================= */
+const TABS = [
+  {id:'dashboard', label:'🏆 Dashboard'},
+  {id:'tracker', label:'📅 Study Tracker'},
+  {id:'timetable', label:'📖 Timetable'},
+  {id:'essays', label:'📝 Essays'},
+  {id:'speaking', label:'🎤 Speaking'},
+  {id:'vocab', label:'📚 Vocabulary'},
+  {id:'mistakes', label:'🔎 Mistakes'},
+  {id:'sync', label:'🔗 GitHub Sync'},
+];
+
+const READING_TABLE = [[0,2.5],[10,3],[12,3.5],[14,4],[16,4.5],[19,5],[23,5.5],[26,6],[30,6.5],[32,7],[34,7.5],[35,8],[37,8.5],[39,9]];
+const LISTENING_TABLE = [[0,2.5],[10,3],[13,3.5],[15,4],[18,4.5],[21,5],[24,5.5],[26,6],[28,6.5],[30,7],[32,7.5],[34,8],[36,8.5],[38,9]];
+
+function bandLookup(table, raw){
+  let band = table[0][1];
+  for(const [min,b] of table){ if(raw >= min) band = b; }
+  return band;
+}
+function bandClass(band){
+  if(band >= 7) return 'band-high';
+  if(band >= 5.5) return 'band-mid';
+  return 'band-low';
+}
+function fmtBand(b){ return (Math.round(b*2)/2).toFixed(1); }
+
+const DEFAULT_TIMETABLE = [
+  {time:'7:00–8:30', activity:'Reading Practice (Cambridge)', duration:'1h 30m', done:false, notes:''},
+  {time:'8:30–8:40', activity:'Short Break', duration:'10m', done:false, notes:''},
+  {time:'8:40–10:10', activity:'Listening Practice', duration:'1h 30m', done:false, notes:''},
+  {time:'10:10–11:00', activity:'Writing Task 2 / Task 1', duration:'50m', done:false, notes:''},
+  {time:'11:00–1:00', activity:'Lunch + Relax', duration:'2h', done:false, notes:''},
+  {time:'1:00–2:00', activity:'Grammar + Vocabulary', duration:'1h', done:false, notes:''},
+  {time:'2:00–3:00', activity:'Speaking Practice', duration:'1h', done:false, notes:''},
+  {time:'3:00–5:00', activity:'Sleep / Nap', duration:'2h', done:false, notes:''},
+  {time:'5:00–6:10', activity:'Error Analysis + Vocabulary Revision', duration:'1h 10m', done:false, notes:''},
+  {time:'6:10–7:10', activity:'Essay Review / Rewrite', duration:'1h', done:false, notes:''},
+];
+
+function buildDefaultTracker(){
+  const days = [];
+  const start = new Date(2026,6,14); // 14 July 2026
+  for(let i=0;i<18;i++){
+    const d = new Date(start); d.setDate(start.getDate()+i);
+    days.push({date: d.toISOString().slice(0,10), reading:0, listening:0, writing:0, speaking:0, vocab:0, done:false});
+  }
+  return days;
+}
+
+let state = {
+  settings: {examDate:'2026-08-15', targetBand:8},
+  tracker: buildDefaultTracker(),
+  timetable: JSON.parse(JSON.stringify(DEFAULT_TIMETABLE)),
+  essays: [{date:'2026-07-14', task:'Task 2', topic:'Advantages/disadvantages of remote work', words:280, ta:6.5, cc:7, lr:6.5, gra:7}],
+  speaking: [{date:'2026-07-14', topic:'Part 2: Describe a memorable trip', fc:6.5, lr:7, gra:6.5, pron:7}],
+  vocab: [],
+  mistakesRead: [],
+  mistakesListen: [],
+};
+
+/* ============================= STORAGE (localStorage cache) ============================= */
+const LOCAL_KEY = 'ielts-os-state';
+let saveTimer = null;
+let ghSaveTimer = null;
+let currentSha = null; // tracks the GitHub file's sha for conflict-free updates
+
+function queueSave(){
+  // fast local cache, always on
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    try{ localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); flashSaved(); }
+    catch(e){ console.error('localStorage save failed', e); }
+  }, 400);
+  // slower debounced GitHub commit, only if configured
+  if(getGithubConfig().token){
+    clearTimeout(ghSaveTimer);
+    setGhStatus('Changes pending sync…', 'var(--gold)');
+    ghSaveTimer = setTimeout(()=>commitToGithub(false), 6000);
+  }
+}
+function flashSaved(){
+  const pill = document.getElementById('savePill');
+  pill.classList.add('show');
+  setTimeout(()=>pill.classList.remove('show'), 900);
+}
+function loadAllLocal(){
+  try{
+    const raw = localStorage.getItem(LOCAL_KEY);
+    if(raw){ state = Object.assign(state, JSON.parse(raw)); }
+  }catch(e){ /* no local cache yet */ }
+}
+
+/* ============================= GITHUB SYNC ============================= */
+function getGithubConfig(){
+  return {
+    owner: localStorage.getItem('ielts-gh-owner') || '',
+    repo: localStorage.getItem('ielts-gh-repo') || '',
+    branch: localStorage.getItem('ielts-gh-branch') || 'main',
+    path: localStorage.getItem('ielts-gh-path') || 'data/ielts-data.json',
+    token: localStorage.getItem('ielts-gh-token') || '',
+  };
+}
+function fillGithubForm(){
+  const c = getGithubConfig();
+  document.getElementById('ghOwner').value = c.owner;
+  document.getElementById('ghRepo').value = c.repo;
+  document.getElementById('ghBranch').value = c.branch;
+  document.getElementById('ghPath').value = c.path;
+  document.getElementById('ghToken').value = c.token;
+}
+function saveGithubConfig(){
+  localStorage.setItem('ielts-gh-owner', document.getElementById('ghOwner').value.trim());
+  localStorage.setItem('ielts-gh-repo', document.getElementById('ghRepo').value.trim());
+  localStorage.setItem('ielts-gh-branch', document.getElementById('ghBranch').value.trim() || 'main');
+  localStorage.setItem('ielts-gh-path', document.getElementById('ghPath').value.trim() || 'data/ielts-data.json');
+  localStorage.setItem('ielts-gh-token', document.getElementById('ghToken').value.trim());
+  setGhStatus('Settings saved. Try "Load from GitHub" or "Sync now".', 'var(--blue)');
+}
+function setGhStatus(msg, color){
+  const el = document.getElementById('ghStatus');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.color = color || 'var(--faint)';
+}
+function ghApiUrl(c){
+  return `https://api.github.com/repos/${c.owner}/${c.repo}/contents/${c.path}`;
+}
+function utf8ToB64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64ToUtf8(str){ return decodeURIComponent(escape(atob(str))); }
+
+async function loadFromGithub(manual){
+  const c = getGithubConfig();
+  if(!c.owner || !c.repo || !c.token){
+    if(manual) setGhStatus('Fill in owner, repo and token first, then Save settings.', 'var(--red)');
+    return false;
+  }
+  setGhStatus('Loading from GitHub…', 'var(--gold)');
+  try{
+    const res = await fetch(ghApiUrl(c) + `?ref=${encodeURIComponent(c.branch)}`, {
+      headers: {
+        'Authorization': `Bearer ${c.token}`,
+        'Accept': 'application/vnd.github+json',
+      }
+    });
+    if(res.status === 404){
+      setGhStatus('No data file there yet — click "Sync now" to create it.', 'var(--muted)');
+      currentSha = null;
+      return false;
+    }
+    if(!res.ok){
+      const body = await res.text();
+      setGhStatus(`Load failed (${res.status}): ${res.statusText}`, 'var(--red)');
+      console.error(body);
+      return false;
+    }
+    const json = await res.json();
+    currentSha = json.sha;
+    const decoded = b64ToUtf8(json.content.replace(/\n/g,''));
+    const loaded = JSON.parse(decoded);
+    state = Object.assign(state, loaded);
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
+    renderEverything();
+    setGhStatus('Loaded latest data from GitHub ✓', 'var(--green)');
+    return true;
+  }catch(e){
+    console.error(e);
+    setGhStatus('Load failed — check repo name, owner and token permissions.', 'var(--red)');
+    return false;
+  }
+}
+
+async function commitToGithub(manual){
+  const c = getGithubConfig();
+  if(!c.owner || !c.repo || !c.token){
+    if(manual) setGhStatus('Fill in owner, repo and token first, then Save settings.', 'var(--red)');
+    return;
+  }
+  setGhStatus('Syncing to GitHub…', 'var(--gold)');
+  try{
+    const body = {
+      message: `Update IELTS tracker data — ${new Date().toISOString()}`,
+      content: utf8ToB64(JSON.stringify(state, null, 2)),
+      branch: c.branch,
+    };
+    if(currentSha) body.sha = currentSha;
+    const res = await fetch(ghApiUrl(c), {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${c.token}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if(!res.ok){
+      const errBody = await res.json().catch(()=>({}));
+      if(res.status === 409 || (errBody.message||'').includes('sha')){
+        setGhStatus('Someone/something else updated the file — reloading latest before retrying.', 'var(--red)');
+        await loadFromGithub(false);
+        return;
+      }
+      setGhStatus(`Sync failed (${res.status}): ${errBody.message || res.statusText}`, 'var(--red)');
+      return;
+    }
+    const json = await res.json();
+    currentSha = json.content.sha;
+    setGhStatus('Synced to GitHub ✓ ' + new Date().toLocaleTimeString(), 'var(--green)');
+  }catch(e){
+    console.error(e);
+    setGhStatus('Sync failed — check your network and token.', 'var(--red)');
+  }
+}
+
+/* ============================= NAV ============================= */
+function renderNav(){
+  const nav = document.getElementById('tabNav');
+  nav.innerHTML = '';
+  TABS.forEach((t,i)=>{
+    const btn = document.createElement('button');
+    btn.textContent = t.label;
+    btn.className = i===0 ? 'active' : '';
+    btn.onclick = ()=>switchTab(t.id, btn);
+    nav.appendChild(btn);
+  });
+}
+function switchTab(id, btn){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+/* ============================= DASHBOARD ============================= */
+function renderDashboard(){
+  document.getElementById('examDateInput').value = state.settings.examDate;
+  document.getElementById('targetBandInput').value = state.settings.targetBand;
+
+  const days = Math.ceil((new Date(state.settings.examDate) - new Date(new Date().toDateString())) / 86400000);
+  document.getElementById('countdownStat').textContent = (isNaN(days)?'—':days) + ' days';
+
+  // streak: consecutive done days counting back from most recent
+  let streak = 0;
+  for(let i=state.tracker.length-1;i>=0;i--){
+    if(state.tracker[i].done) streak++; else break;
+  }
+  document.getElementById('streakStat').textContent = streak + ' days';
+
+  const doneCount = state.tracker.filter(d=>d.done).length;
+  const completion = state.tracker.length ? Math.round(100*doneCount/state.tracker.length) : 0;
+  document.getElementById('completionStat').textContent = completion + '%';
+
+  const readRaw = Number(document.getElementById('readRaw').value)||0;
+  const listenRaw = Number(document.getElementById('listenRaw').value)||0;
+  const readBand = bandLookup(READING_TABLE, readRaw);
+  const listenBand = bandLookup(LISTENING_TABLE, listenRaw);
+
+  const essayBands = state.essays.map(e=>avg([e.ta,e.cc,e.lr,e.gra])).filter(n=>!isNaN(n));
+  const writeBand = essayBands.length ? Math.round(2*avg(essayBands))/2 : 0;
+
+  const speakBands = state.speaking.map(s=>avg([s.fc,s.lr,s.gra,s.pron])).filter(n=>!isNaN(n));
+  const speakBand = speakBands.length ? Math.round(2*avg(speakBands))/2 : 0;
+
+  setBandCell('readBandCell', readBand);
+  setBandCell('listenBandCell', listenBand);
+  setBandCell('writeBandCell', writeBand);
+  setBandCell('speakBandCell', speakBand);
+
+  const overall = Math.round(2*avg([readBand, listenBand, writeBand, speakBand]))/2;
+  document.getElementById('predictedStamp').textContent = 'PREDICTED — ' + fmtBand(overall);
+
+  renderBadges({streak, vocabCount: state.vocab.length, essayCount: state.essays.length,
+                speakingCount: state.speaking.length, overall});
+  renderTargetTable({readBand, listenBand, writeBand, speakBand, overall});
+}
+function avg(arr){
+  const nums = arr.map(Number).filter(n=>!isNaN(n));
+  if(!nums.length) return NaN;
+  return nums.reduce((a,b)=>a+b,0)/nums.length;
+}
+function setBandCell(id, band){
+  const el = document.getElementById(id);
+  el.innerHTML = `<span class="band-chip ${bandClass(band)}">${fmtBand(band)}</span>`;
+}
+function renderBadges({streak, vocabCount, essayCount, speakingCount, overall}){
+  const badges = [
+    {name:'7-Day Streak', ok: streak>=7},
+    {name:'14-Day Streak', ok: streak>=14},
+    {name:'50 Vocabulary Words', ok: vocabCount>=50},
+    {name:'150 Vocabulary Words', ok: vocabCount>=150},
+    {name:'10 Essays Written', ok: essayCount>=10},
+    {name:'10 Speaking Sessions', ok: speakingCount>=10},
+    {name:'Band 8 Predicted', ok: overall>=8},
+  ];
+  const list = document.getElementById('badgeList');
+  list.innerHTML = badges.map(b=>`
+    <div class="badge-row">
+      <div class="badge-name">${b.name}</div>
+      <div class="badge-status ${b.ok?'unlocked':'locked'}">${b.ok?'✅ Unlocked':'🔒 Locked'}</div>
+    </div>`).join('');
+}
+function renderTargetTable({readBand, listenBand, writeBand, speakBand, overall}){
+  const target = Number(state.settings.targetBand)||8;
+  const rows = [
+    ['Reading', readBand, 'Timed passages daily; review all wrong answers by question type'],
+    ['Listening', listenBand, 'Daily section 3-4 practice; transcribe tricky audio'],
+    ['Writing', writeBand, '1 essay/day + rewrite using examiner-style feedback'],
+    ['Speaking', speakBand, 'Record daily 2-min answers; review fluency and pausing'],
+    ['Overall', overall, 'Track weakest skill and prioritise it each week'],
+  ];
+  document.getElementById('targetTableBody').innerHTML = rows.map(([skill,cur,plan])=>{
+    const gap = Math.round((target-cur)*2)/2;
+    const gapColor = gap<=0 ? 'var(--green)' : 'var(--red)';
+    return `<tr>
+      <td>${skill}</td>
+      <td><span class="band-chip ${bandClass(cur)}">${fmtBand(cur)}</span></td>
+      <td style="font-family:var(--mono); color:var(--blue);">${fmtBand(target)}</td>
+      <td style="font-family:var(--mono); color:${gapColor}; font-weight:600;">${gap>0?'+':''}${gap.toFixed(1)}</td>
+      <td style="color:var(--muted); font-size:12px;">${plan}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('examDateInput').addEventListener('change', e=>{
+  state.settings.examDate = e.target.value; renderDashboard(); queueSave();
+});
+document.getElementById('targetBandInput').addEventListener('change', e=>{
+  state.settings.targetBand = e.target.value; renderDashboard(); queueSave();
+});
+document.getElementById('readRaw').addEventListener('input', ()=>{renderDashboard(); queueSave();});
+document.getElementById('listenRaw').addEventListener('input', ()=>{renderDashboard(); queueSave();});
+
+/* ============================= STUDY TRACKER ============================= */
+const SKILLS = [['reading','R'],['listening','L'],['writing','W'],['speaking','S'],['vocab','V']];
+function renderTracker(){
+  const wrap = document.getElementById('dayCards');
+  wrap.innerHTML = state.tracker.map((d,i)=>{
+    const total = SKILLS.reduce((s,[k])=>s+Number(d[k])||0+0,0);
+    const totalHrs = SKILLS.reduce((s,[k])=>s+(Number(d[k])||0),0);
+    const dateObj = new Date(d.date+'T00:00:00');
+    const dayLabel = dateObj.toLocaleDateString('en-GB',{weekday:'short', day:'2-digit', month:'short'});
+    return `<div class="daycard ${d.done?'done':''}">
+      <div class="daycard-head">
+        <span class="daycard-day">DAY ${i+1}</span>
+        <span class="daycard-date">${dayLabel}</span>
+      </div>
+      <div class="perf"></div>
+      <div class="hourgrid">
+        ${SKILLS.map(([k,label])=>`
+          <div>
+            <label>${label}</label>
+            <input type="number" step="0.5" min="0" value="${d[k]}" data-day="${i}" data-skill="${k}" class="hour-input"/>
+          </div>`).join('')}
+      </div>
+      <div class="daycard-foot">
+        <span class="total-h">${totalHrs.toFixed(1)}h total</span>
+        <span class="toggle ${d.done?'on':''}" data-day="${i}">${d.done?'✓ Done':'Mark done'}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('.hour-input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const day = Number(e.target.dataset.day), skill = e.target.dataset.skill;
+      state.tracker[day][skill] = Number(e.target.value)||0;
+      renderTracker(); renderDashboard(); queueSave();
+    });
+  });
+  wrap.querySelectorAll('.toggle').forEach(tog=>{
+    tog.addEventListener('click', e=>{
+      const day = Number(e.target.dataset.day);
+      state.tracker[day].done = !state.tracker[day].done;
+      renderTracker(); renderDashboard(); queueSave();
+    });
+  });
+
+  renderProgressChart();
+}
+function renderProgressChart(){
+  const chart = document.getElementById('progressChart');
+  let doneSoFar = 0;
+  chart.innerHTML = state.tracker.map((d,i)=>{
+    if(d.done) doneSoFar++;
+    const pct = Math.round(100*doneSoFar/(i+1));
+    return `<div class="bar ${d.done?'done':''}" style="height:${Math.max(pct,3)}%;" title="Day ${i+1}: ${pct}%"></div>`;
+  }).join('');
+}
+
+/* ============================= TIMETABLE ============================= */
+function renderTimetable(){
+  const body = document.getElementById('timetableBody');
+  body.innerHTML = state.timetable.map((t,i)=>`
+    <tr>
+      <td style="font-family:var(--mono); color:var(--blue);">${t.time}</td>
+      <td>${t.activity}</td>
+      <td style="font-family:var(--mono); color:var(--gold);">${t.duration}</td>
+      <td><span class="toggle ${t.done?'on':''}" data-i="${i}" class="tt-toggle">${t.done?'✓ Yes':'No'}</span></td>
+      <td><input type="text" data-i="${i}" class="tt-notes" value="${t.notes||''}" placeholder="notes..."/></td>
+    </tr>`).join('');
+  body.querySelectorAll('.toggle').forEach(tog=>{
+    tog.addEventListener('click', e=>{
+      const i = Number(e.target.dataset.i);
+      state.timetable[i].done = !state.timetable[i].done;
+      renderTimetable(); queueSave();
+    });
+  });
+  body.querySelectorAll('.tt-notes').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      state.timetable[Number(e.target.dataset.i)].notes = e.target.value; queueSave();
+    });
+  });
+  const doneCount = state.timetable.filter(t=>t.done).length;
+  const pct = Math.round(100*doneCount/state.timetable.length);
+  document.getElementById('timetableCompletion').textContent = `Daily completion: ${pct}% (${doneCount}/${state.timetable.length} blocks done)`;
+}
+
+/* ============================= ESSAYS ============================= */
+function addEssay(){
+  state.essays.push({date:new Date().toISOString().slice(0,10), task:'Task 2', topic:'', words:0, ta:0, cc:0, lr:0, gra:0});
+  renderEssays(); queueSave();
+}
+function renderEssays(){
+  const body = document.getElementById('essayBody');
+  body.innerHTML = state.essays.map((e,i)=>{
+    const band = avg([e.ta,e.cc,e.lr,e.gra]);
+    const bandR = isNaN(band) ? 0 : Math.round(band*2)/2;
+    return `<tr>
+      <td><input type="date" value="${e.date}" data-i="${i}" data-f="date" class="essay-f"/></td>
+      <td><select data-i="${i}" data-f="task" class="essay-f"><option ${e.task==='Task 1'?'selected':''}>Task 1</option><option ${e.task==='Task 2'?'selected':''}>Task 2</option></select></td>
+      <td><input type="text" value="${e.topic}" data-i="${i}" data-f="topic" class="essay-f" style="min-width:140px;"/></td>
+      <td><input type="number" value="${e.words}" data-i="${i}" data-f="words" class="essay-f" style="width:60px;"/></td>
+      <td><input type="number" step="0.5" min="0" max="9" value="${e.ta}" data-i="${i}" data-f="ta" class="essay-f"/></td>
+      <td><input type="number" step="0.5" min="0" max="9" value="${e.cc}" data-i="${i}" data-f="cc" class="essay-f"/></td>
+      <td><input type="number" step="0.5" min="0" max="9" value="${e.lr}" data-i="${i}" data-f="lr" class="essay-f"/></td>
+      <td><input type="number" step="0.5" min="0" max="9" value="${e.gra}" data-i="${i}" data-f="gra" class="essay-f"/></td>
+      <td><span class="band-chip ${bandClass(bandR)}">${fmtBand(bandR)}</span></td>
+      <td><button class="del-btn" data-i="${i}" onclick="delRow('essays',${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  body.querySelectorAll('.essay-f').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i), f = e.target.dataset.f;
+      state.essays[i][f] = (['ta','cc','lr','gra','words'].includes(f)) ? Number(e.target.value) : e.target.value;
+      renderEssays(); renderDashboard(); queueSave();
+    });
+  });
+}
+
+/* ============================= SPEAKING ============================= */
+function addSpeaking(){
+  state.speaking.push({date:new Date().toISOString().slice(0,10), topic:'', fc:0, lr:0, gra:0, pron:0});
+  renderSpeaking(); queueSave();
+}
+function renderSpeaking(){
+  const body = document.getElementById('speakingBody');
+  body.innerHTML = state.speaking.map((s,i)=>{
+    const band = avg([s.fc,s.lr,s.gra,s.pron]);
+    const bandR = isNaN(band) ? 0 : Math.round(band*2)/2;
+    return `<tr>
+      <td><input type="date" value="${s.date}" data-i="${i}" data-f="date" class="speak-f"/></td>
+      <td><input type="text" value="${s.topic}" data-i="${i}" data-f="topic" class="speak-f" style="min-width:150px;"/></td>
+      <td><input type="number" step="0.5" min="0" max="9" value="${s.fc}" data-i="${i}" data-f="fc" class="speak-f"/></td>
+      <td><input type="number" step="0.5" min="0" max="9" value="${s.lr}" data-i="${i}" data-f="lr" class="speak-f"/></td>
+      <td><input type="number" step="0.5" min="0" max="9" value="${s.gra}" data-i="${i}" data-f="gra" class="speak-f"/></td>
+      <td><input type="number" step="0.5" min="0" max="9" value="${s.pron}" data-i="${i}" data-f="pron" class="speak-f"/></td>
+      <td><span class="band-chip ${bandClass(bandR)}">${fmtBand(bandR)}</span></td>
+      <td><button class="del-btn" onclick="delRow('speaking',${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  body.querySelectorAll('.speak-f').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i), f = e.target.dataset.f;
+      state.speaking[i][f] = (['fc','lr','gra','pron'].includes(f)) ? Number(e.target.value) : e.target.value;
+      renderSpeaking(); renderDashboard(); queueSave();
+    });
+  });
+}
+
+/* ============================= VOCABULARY ============================= */
+function addVocab(){
+  const today = new Date().toISOString().slice(0,10);
+  state.vocab.push({word:'', meaning:'', example:'', added:today, status:'New'});
+  renderVocab(); queueSave();
+}
+function nextReviewDate(addedStr){
+  if(!addedStr) return '';
+  const d = new Date(addedStr+'T00:00:00');
+  d.setDate(d.getDate()+1);
+  return d.toISOString().slice(0,10);
+}
+function renderVocab(){
+  document.getElementById('vocabCount').textContent = `(${state.vocab.length} / 350)`;
+  const body = document.getElementById('vocabBody');
+  body.innerHTML = state.vocab.map((v,i)=>{
+    const nr = nextReviewDate(v.added);
+    const overdue = nr && new Date(nr) < new Date(new Date().toDateString());
+    return `<tr>
+      <td><input type="text" value="${v.word}" data-i="${i}" data-f="word" class="vocab-f" style="min-width:100px;"/></td>
+      <td><input type="text" value="${v.meaning}" data-i="${i}" data-f="meaning" class="vocab-f" style="min-width:140px;"/></td>
+      <td><input type="text" value="${v.example}" data-i="${i}" data-f="example" class="vocab-f" style="min-width:160px;"/></td>
+      <td><input type="date" value="${v.added}" data-i="${i}" data-f="added" class="vocab-f"/></td>
+      <td style="font-family:var(--mono); color:${overdue?'var(--red)':'var(--blue)'};">${nr||'—'}</td>
+      <td><select data-i="${i}" data-f="status" class="vocab-f">
+            <option ${v.status==='New'?'selected':''}>New</option>
+            <option ${v.status==='Learning'?'selected':''}>Learning</option>
+            <option ${v.status==='Mastered'?'selected':''}>Mastered</option>
+          </select></td>
+      <td><button class="del-btn" onclick="delRow('vocab',${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  body.querySelectorAll('.vocab-f').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i), f = e.target.dataset.f;
+      state.vocab[i][f] = e.target.value;
+      renderVocab(); renderDashboard(); queueSave();
+    });
+  });
+}
+
+/* ============================= MISTAKE ANALYZERS ============================= */
+function addMistake(kind){
+  const row = {ref:'', qtype:'', your:'', correct:''};
+  if(kind==='read') state.mistakesRead.push(row); else state.mistakesListen.push(row);
+  renderMistakes(); queueSave();
+}
+function renderMistakes(){
+  renderMistakeTable('readMistakeBody', state.mistakesRead, 'read', 'Passage');
+  renderMistakeTable('listenMistakeBody', state.mistakesListen, 'listen', 'Section');
+}
+function renderMistakeTable(bodyId, arr, kind, refLabel){
+  const body = document.getElementById(bodyId);
+  body.innerHTML = arr.map((m,i)=>{
+    const correct = m.your && m.correct && m.your.trim().toLowerCase()===m.correct.trim().toLowerCase();
+    const resultLabel = !m.your || !m.correct ? '' : (correct ? '✓ Correct' : '✗ Wrong');
+    const resultColor = correct ? 'var(--green)' : (resultLabel ? 'var(--red)' : 'var(--faint)');
+    return `<tr>
+      <td><input type="text" value="${m.ref}" data-i="${i}" data-f="ref" data-kind="${kind}" class="mist-f" placeholder="${refLabel}" style="min-width:90px;"/></td>
+      <td><input type="text" value="${m.qtype}" data-i="${i}" data-f="qtype" data-kind="${kind}" class="mist-f" style="min-width:100px;"/></td>
+      <td><input type="text" value="${m.your}" data-i="${i}" data-f="your" data-kind="${kind}" class="mist-f" style="width:70px;"/></td>
+      <td><input type="text" value="${m.correct}" data-i="${i}" data-f="correct" data-kind="${kind}" class="mist-f" style="width:70px;"/></td>
+      <td style="font-family:var(--mono); font-size:11px; color:${resultColor};">${resultLabel}</td>
+      <td><button class="del-btn" onclick="delMistake('${kind}',${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  body.querySelectorAll('.mist-f').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i), f = e.target.dataset.f, k = e.target.dataset.kind;
+      const target = k==='read' ? state.mistakesRead : state.mistakesListen;
+      target[i][f] = e.target.value;
+      renderMistakes(); queueSave();
+    });
+  });
+}
+function delMistake(kind, i){
+  (kind==='read' ? state.mistakesRead : state.mistakesListen).splice(i,1);
+  renderMistakes(); queueSave();
+}
+
+/* ============================= GENERIC DELETE ============================= */
+function delRow(key, i){
+  state[key].splice(i,1);
+  if(key==='essays') renderEssays();
+  if(key==='speaking') renderSpeaking();
+  if(key==='vocab') renderVocab();
+  renderDashboard();
+  queueSave();
+}
+
+/* ============================= INIT ============================= */
+function renderEverything(){
+  renderDashboard();
+  renderTracker();
+  renderTimetable();
+  renderEssays();
+  renderSpeaking();
+  renderVocab();
+  renderMistakes();
+}
+async function init(){
+  loadAllLocal();      // instant local cache first, so the app is usable offline
+  renderNav();
+  fillGithubForm();
+  renderEverything();
+  const c = getGithubConfig();
+  if(c.token && c.owner && c.repo){
+    await loadFromGithub(false); // then reconcile with GitHub if configured
+  }
+}
+init();
+</script>
+</body>
+</html>
