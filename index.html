@@ -6,6 +6,7 @@
 <title>IELTS Band 8 — Operating System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --ink:#0A101E;
@@ -27,6 +28,25 @@
     --mono: 'IBM Plex Mono', monospace;
     --body: 'Inter', sans-serif;
   }
+  html[data-theme="light"]{
+    --ink:#F4F1EA;
+    --panel:#FFFFFF;
+    --card:#FBF9F4;
+    --card-2:#F1EDE3;
+    --line:#DDD5C3;
+    --gold:#B8842E;
+    --gold-dim:#E4CB9A;
+    --green:#1E8F6B;
+    --green-dim:#CDEBDE;
+    --red:#D14D4D;
+    --red-dim:#F6D9D9;
+    --blue:#2F6FD6;
+    --text:#1B1B18;
+    --muted:#6B6558;
+    --faint:#9C9585;
+  }
+  html[data-theme="light"] body{ background:var(--ink); }
+  html[data-theme="light"] .stat input{ color:var(--gold); }
   *{box-sizing:border-box;}
   body{
     margin:0; background:var(--ink); color:var(--text);
@@ -191,7 +211,10 @@
         <h1>IELTS Operating System</h1>
         <div class="sub">Your daily command center for Reading · Listening · Writing · Speaking · Vocabulary</div>
       </div>
-      <div class="stamp" id="predictedStamp">PREDICTED — 7.0</div>
+      <div style="display:flex; align-items:flex-start; gap:10px;">
+        <button id="themeToggle" onclick="toggleTheme()" style="font-family:var(--mono); font-size:12px; background:var(--card-2); color:var(--text); border:1px solid var(--line); padding:6px 12px; border-radius:100px; cursor:pointer;">🌙 Dark</button>
+        <div class="stamp" id="predictedStamp">PREDICTED — 7.0</div>
+      </div>
     </div>
     <div class="ticket-stats">
       <div class="stat">
@@ -342,6 +365,34 @@
     </div>
   </section>
 
+  <section id="tab-gdrive">
+    <div class="panel">
+      <h2>🟢 Google Drive Sync <span style="color:var(--faint); font-weight:400; font-size:12px;">(easy mode)</span></h2>
+      <div class="hint" style="margin-bottom:14px; font-size:12px; line-height:1.6;">
+        Your data is saved as a hidden file in your own Google Drive's private app storage — nothing shows up
+        in your regular Drive folders, and only this app can read it. No token to copy, just a normal Google
+        sign-in. One-time setup: create a free OAuth Client ID in
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--blue);">Google Cloud Console</a>
+        → "Create Credentials" → "OAuth client ID" → type "Web application" → add
+        <code>https://YOUR-GITHUB-USERNAME.github.io</code> under "Authorized JavaScript origins" → paste the
+        Client ID below. While your app is in "Testing" mode in Google Cloud, add your own Google account as a
+        test user, and you may need to re-sign-in every ~7 days — that's a Google limitation, not a bug here.
+      </div>
+      <table>
+        <tbody>
+          <tr><td style="width:160px; color:var(--muted);">OAuth Client ID</td><td><input type="text" id="gdClientId" placeholder="xxxxxxxx.apps.googleusercontent.com"/></td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <button class="addrow-btn" onclick="saveGdriveClientId()">Save Client ID</button>
+        <button class="addrow-btn" onclick="connectGoogleDrive()">🔐 Sign in with Google</button>
+        <button class="addrow-btn" onclick="loadFromGdrive(true)">⬇ Load from Drive</button>
+        <button class="addrow-btn" onclick="saveToGdrive(true)">⬆ Save to Drive</button>
+      </div>
+      <div class="hint" id="gdStatus" style="margin-top:12px;">Not connected yet.</div>
+    </div>
+  </section>
+
   <section id="tab-sync">
     <div class="panel">
       <h2>🔗 GitHub Sync</h2>
@@ -383,6 +434,7 @@ const TABS = [
   {id:'speaking', label:'🎤 Speaking'},
   {id:'vocab', label:'📚 Vocabulary'},
   {id:'mistakes', label:'🔎 Mistakes'},
+  {id:'gdrive', label:'🟢 Google Drive'},
   {id:'sync', label:'🔗 GitHub Sync'},
 ];
 
@@ -453,6 +505,12 @@ function queueSave(){
     clearTimeout(ghSaveTimer);
     setGhStatus('Changes pending sync…', 'var(--gold)');
     ghSaveTimer = setTimeout(()=>commitToGithub(false), 6000);
+  }
+  // slower debounced Google Drive save, only if signed in
+  if(gdriveAccessToken){
+    clearTimeout(gdSaveTimer);
+    setGdStatus('Changes pending sync…', 'var(--gold)');
+    gdSaveTimer = setTimeout(()=>saveToGdrive(false), 6000);
   }
 }
 function flashSaved(){
@@ -587,6 +645,180 @@ async function commitToGithub(manual){
     setGhStatus('Sync failed — check your network and token.', 'var(--red)');
   }
 }
+
+/* ============================= GOOGLE DRIVE SYNC (appDataFolder — hidden, easy mode) ============================= */
+const GDRIVE_FILENAME = 'ielts-os-data.json';
+const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+let gdriveTokenClient = null;
+let gdriveAccessToken = null;
+let gdriveFileId = null;
+let gdSaveTimer = null;
+
+function getGdriveClientId(){
+  return localStorage.getItem('ielts-gd-clientid') || '';
+}
+function saveGdriveClientId(){
+  const id = document.getElementById('gdClientId').value.trim();
+  localStorage.setItem('ielts-gd-clientid', id);
+  setGdStatus('Client ID saved. Click "Sign in with Google" next.', 'var(--blue)');
+}
+function fillGdriveForm(){
+  document.getElementById('gdClientId').value = getGdriveClientId();
+}
+function setGdStatus(msg, color){
+  const el = document.getElementById('gdStatus');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.color = color || 'var(--faint)';
+}
+
+function ensureGdriveTokenClient(){
+  const clientId = getGdriveClientId();
+  if(!clientId){
+    setGdStatus('Paste your OAuth Client ID and click "Save Client ID" first.', 'var(--red)');
+    return null;
+  }
+  if(typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2){
+    setGdStatus('Google sign-in script did not load — check your connection and reload.', 'var(--red)');
+    return null;
+  }
+  if(!gdriveTokenClient || gdriveTokenClient._clientId !== clientId){
+    gdriveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: GDRIVE_SCOPE,
+      callback: (resp)=>{
+        if(resp.error){
+          setGdStatus('Sign-in failed: ' + resp.error, 'var(--red)');
+          return;
+        }
+        gdriveAccessToken = resp.access_token;
+        setGdStatus('Signed in ✓ Loading your data…', 'var(--green)');
+        loadFromGdrive(false);
+      }
+    });
+    gdriveTokenClient._clientId = clientId;
+  }
+  return gdriveTokenClient;
+}
+function connectGoogleDrive(){
+  const client = ensureGdriveTokenClient();
+  if(!client) return;
+  client.requestAccessToken({ prompt: gdriveAccessToken ? '' : 'consent' });
+}
+// Gets a usable token, silently refreshing if we already have consent
+function withGdriveToken(cb){
+  const client = ensureGdriveTokenClient();
+  if(!client) return;
+  if(gdriveAccessToken){ cb(); return; }
+  gdriveTokenClient.callback = (resp)=>{
+    if(resp.error){ setGdStatus('Sign-in failed: ' + resp.error, 'var(--red)'); return; }
+    gdriveAccessToken = resp.access_token;
+    cb();
+  };
+  gdriveTokenClient.requestAccessToken({ prompt: '' });
+}
+
+async function findGdriveFile(){
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,modifiedTime)&q=name='${GDRIVE_FILENAME}'`,
+    { headers: { 'Authorization': `Bearer ${gdriveAccessToken}` } }
+  );
+  if(!res.ok) throw new Error('Drive list failed: ' + res.status);
+  const json = await res.json();
+  return (json.files && json.files[0]) ? json.files[0] : null;
+}
+
+async function loadFromGdrive(manual){
+  if(!gdriveAccessToken){
+    if(manual){ withGdriveToken(()=>loadFromGdrive(manual)); }
+    return false;
+  }
+  setGdStatus('Loading from Google Drive…', 'var(--gold)');
+  try{
+    const file = await findGdriveFile();
+    if(!file){
+      gdriveFileId = null;
+      setGdStatus('No data saved yet — click "Save to Drive" to create it.', 'var(--muted)');
+      return false;
+    }
+    gdriveFileId = file.id;
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+      headers: { 'Authorization': `Bearer ${gdriveAccessToken}` }
+    });
+    if(!res.ok) throw new Error('Drive download failed: ' + res.status);
+    const loaded = await res.json();
+    state = Object.assign(state, loaded);
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
+    renderEverything();
+    setGdStatus('Loaded latest data from Google Drive ✓', 'var(--green)');
+    return true;
+  }catch(e){
+    console.error(e);
+    setGdStatus('Load failed — try signing in again.', 'var(--red)');
+    return false;
+  }
+}
+
+async function saveToGdrive(manual){
+  if(!gdriveAccessToken){
+    if(manual){ withGdriveToken(()=>saveToGdrive(manual)); }
+    return;
+  }
+  setGdStatus('Saving to Google Drive…', 'var(--gold)');
+  try{
+    if(!gdriveFileId){
+      const existing = await findGdriveFile();
+      if(existing) gdriveFileId = existing.id;
+    }
+    const body = JSON.stringify(state, null, 2);
+    let res;
+    if(gdriveFileId){
+      res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${gdriveAccessToken}`, 'Content-Type': 'application/json' },
+        body,
+      });
+    } else {
+      const metadata = { name: GDRIVE_FILENAME, parents: ['appDataFolder'] };
+      const boundary = 'ielts_os_boundary';
+      const multipartBody =
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+        `--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
+      res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${gdriveAccessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+        body: multipartBody,
+      });
+    }
+    if(!res.ok){
+      if(res.status === 401){
+        gdriveAccessToken = null;
+        setGdStatus('Session expired — click "Sign in with Google" again.', 'var(--red)');
+        return;
+      }
+      throw new Error('Drive save failed: ' + res.status);
+    }
+    const json = await res.json();
+    gdriveFileId = json.id || gdriveFileId;
+    setGdStatus('Synced to Google Drive ✓ ' + new Date().toLocaleTimeString(), 'var(--green)');
+  }catch(e){
+    console.error(e);
+    setGdStatus('Save failed — check your connection and try again.', 'var(--red)');
+  }
+}
+
+/* ============================= THEME ============================= */
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('themeToggle');
+  if(btn) btn.textContent = theme === 'light' ? '☀️ Light' : '🌙 Dark';
+  localStorage.setItem('ielts-os-theme', theme);
+}
+function toggleTheme(){
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  applyTheme(current === 'light' ? 'dark' : 'light');
+}
+applyTheme(localStorage.getItem('ielts-os-theme') || 'dark');
 
 /* ============================= NAV ============================= */
 function renderNav(){
@@ -956,10 +1188,15 @@ async function init(){
   loadAllLocal();      // instant local cache first, so the app is usable offline
   renderNav();
   fillGithubForm();
+  fillGdriveForm();
   renderEverything();
   const c = getGithubConfig();
   if(c.token && c.owner && c.repo){
     await loadFromGithub(false); // then reconcile with GitHub if configured
+  }
+  // Try a silent Google sign-in if we've connected before (no popup if consent already granted)
+  if(getGdriveClientId()){
+    setTimeout(()=>{ withGdriveToken(()=>{}); }, 500);
   }
 }
 init();
